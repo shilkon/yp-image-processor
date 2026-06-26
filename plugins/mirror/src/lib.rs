@@ -22,10 +22,6 @@ pub unsafe extern "C" fn process_image(
             }
         };
 
-        if !config.horizontal && !config.vertical {
-            return Err(-3);
-        }
-
         mirror_image(width as usize, height as usize, rgba_data, config);
 
         Ok(0)
@@ -163,11 +159,9 @@ mod tests {
 
     #[test]
     fn test_parse_invalid_types_returns_error() {
-        // Передаем строку вместо числа для поля width
         let json = CString::new(r#"{"horizontal": "true", "vertical": true}"#).unwrap();
         let result = parse_config(json.as_ptr());
         
-        // Ожидаем ошибку десериализации
         assert!(result.is_err());
     }
 
@@ -190,7 +184,7 @@ mod tests {
             4, 4, 4, 255,   3, 3, 3, 255
         ];
 
-        assert_eq!(buffer, expected, "Горизонтальное отражение работает некорректно");
+        assert_eq!(buffer, expected);
     }
 
     #[test]
@@ -205,7 +199,7 @@ mod tests {
             1, 1, 1, 255,   2, 2, 2, 255
         ];
 
-        assert_eq!(buffer, expected, "Вертикальное отражение работает некорректно");
+        assert_eq!(buffer, expected);
     }
 
     #[test]
@@ -220,7 +214,7 @@ mod tests {
             2, 2, 2, 255,   1, 1, 1, 255
         ];
 
-        assert_eq!(buffer, expected, "Комбинация отражения (180 градусов) работает некорректно");
+        assert_eq!(buffer, expected);
     }
 
     #[test]
@@ -235,6 +229,6 @@ mod tests {
             3, 3, 3, 255,   4, 4, 4, 255
         ];
 
-        assert_eq!(buffer, expected, "Отсутствие отражения работает некорректно");
+        assert_eq!(buffer, expected);
     }
 }
