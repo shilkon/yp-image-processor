@@ -19,13 +19,13 @@ struct Args {
     #[arg(short, long)]
     output: PathBuf,
 
-    #[arg(short, long)]
+    #[arg(long)]
     params: PathBuf,
 
-    #[arg(short, long)]
+    #[arg(long)]
     plugin: Plugin,
     
-    #[arg(short, long, default_value = "./target/debug")]
+    #[arg(long, default_value = "./target/debug")]
     plugin_path: PathBuf
 }
 
@@ -57,10 +57,18 @@ fn main() -> anyhow::Result<()> {
 
     let plugin_path = &args.plugin_path.join(format!("{}{}.{}", DLL_PREFIX, &args.plugin, DLL_EXTENSION));
 
-    let lib = unsafe { Library::new(plugin_path) }.context("failed to load plugin")?;
-    let process: Symbol<ProcessImageFn> = unsafe { lib.get(b"process_image\0") }?;
+    // Safety: 
+    // 1. Загрузка плагина: Плагин не задействет собственные функции инициализации
+    // 2. Поиск символа: Возвращаемый тип для символа "process_image" указан корректно `ProcessImageFn`
+    // 3. Вызов функции: Передаваемый указатель `image.as_mut_ptr()` валиден для записи/чтения
+    //    в объеме `width * height * 4` байт, а `params.as_ptr()` является валидной C-строкой.
+    // 4. Время жизни: `lib` живет дольше, чем вызываемый из нее функционал.
+    unsafe {
+        let lib = Library::new(plugin_path).context("failed to load plugin")?;
+        let process: Symbol<ProcessImageFn> = lib.get(b"process_image\0")?;
 
-    unsafe { process(image.width(), image.height(), image.as_mut_ptr(), params.as_ptr()) };
+        process(image.width(), image.height(), image.as_mut_ptr(), params.as_ptr());
+    }
 
     image.save_with_format(&args.output, image::ImageFormat::Png)?;
 

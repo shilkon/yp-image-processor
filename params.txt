@@ -1,0 +1,1 @@
+{"radius": 10, "iterations": 4, "vertical": true}

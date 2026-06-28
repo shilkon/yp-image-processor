@@ -3,6 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::panic::{self, AssertUnwindSafe};
 
 #[unsafe(no_mangle)]
+/// # Safety
+/// - `rgba_data` не должен быть null и должен быть выровнен для u8.
+/// - Буфер по адресу `rgba_data` должен быть доступен для чтения и записи
+///   в объеме не менее `width * height * 4` байт.
+/// - Переданные `width` и `height` должны строго соответствовать реальным
+///   физическим размерам изображения в буфере.
+/// - `params` не должен быть null и должен указывать на память с нуль-терминатором (\0)
 pub unsafe extern "C" fn process_image(
     width: u32,
     height: u32,
@@ -52,6 +59,7 @@ fn parse_config(c_buf: *const c_char) -> Result<ImageConfig, String> {
         return Ok(ImageConfig::default());
     }
 
+    // Safety: Указатель c_buf валиден
     let c_str = unsafe { CStr::from_ptr(c_buf) };
     
     let trimmed = std::str::from_utf8(c_str.to_bytes())
@@ -73,6 +81,7 @@ fn blur_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConf
 
     let total_pixels = width * height;
 
+    // Safety: Указатель rgba_data валиден, указывает на буфер размером не меннее total_pixels * 4
     let pixel_slice = unsafe { std::slice::from_raw_parts_mut(rgba_data as *mut [u8; 4], total_pixels) };
     let mut working_buffer = pixel_slice.to_vec();
 
@@ -152,6 +161,7 @@ fn blur_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConf
     }
 
     if config.iterations % 2 == 0 {
+        // Safety: Указатели валидны и указывают на непересекающиеся области памяти размером не менее total_pixels * 4
         unsafe { std::ptr::copy_nonoverlapping(working_buffer.as_ptr() as *const u8, rgba_data, total_pixels * 4) };
     }
 }
