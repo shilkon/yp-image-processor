@@ -29,9 +29,7 @@ pub unsafe extern "C" fn process_image(
             }
         };
 
-        blur_image(width as usize, height as usize, rgba_data, config);
-
-        Ok(0)
+        Ok(blur_image(width as usize, height as usize, rgba_data, config))
     }));
 
     match result {
@@ -74,18 +72,28 @@ fn parse_config(c_buf: *const c_char) -> Result<ImageConfig, String> {
         .map_err(|e| format!("Ошибка JSON: {}", e))
 }
 
-fn blur_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConfig) {
+fn blur_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConfig) -> i32 {
     if rgba_data.is_null() || width == 0 || height == 0 || config.radius == 0 || config.iterations == 0 {
-        return;
+        return -3;
     }
 
-    let total_pixels = width * height;
+    let Some(total_pixels) = width.checked_mul(height) else {
+        return -4;
+    };
+
+    let Ok(r) = TryInto::<isize>::try_into(config.radius) else {
+        return -4;
+    };
+    let Ok(w) = TryInto::<isize>::try_into(width) else {
+        return -4;
+    };
+    let Ok(h) = TryInto::<isize>::try_into(height) else {
+        return -4;
+    };
 
     // Safety: Указатель rgba_data валиден, указывает на буфер размером не меннее total_pixels * 4
     let pixel_slice = unsafe { std::slice::from_raw_parts_mut(rgba_data as *mut [u8; 4], total_pixels) };
     let mut working_buffer = pixel_slice.to_vec();
-
-    let r = config.radius as isize;
 
     for iter in 0..config.iterations {
         let (read_h, write_h) = if iter % 2 == 0 {
@@ -105,7 +113,7 @@ fn blur_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConf
 
                 for k in -r..=r {
                     let nx = x as isize + k;
-                    if nx >= 0 && nx < width as isize {
+                    if nx >= 0 && nx < w {
                         let pixel = read_h[row_offset + nx as usize];
                         sum_r += pixel[0] as u32;
                         sum_g += pixel[1] as u32;
@@ -140,7 +148,7 @@ fn blur_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConf
 
                 for k in -r..=r {
                     let ny = y as isize + k;
-                    if ny >= 0 && ny < height as isize {
+                    if ny >= 0 && ny < h {
                         let pixel = read_v[ny as usize * width + x];
                         sum_r += pixel[0] as u32;
                         sum_g += pixel[1] as u32;
@@ -164,6 +172,8 @@ fn blur_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConf
         // Safety: Указатели валидны и указывают на непересекающиеся области памяти размером не менее total_pixels * 4
         unsafe { std::ptr::copy_nonoverlapping(working_buffer.as_ptr() as *const u8, rgba_data, total_pixels * 4) };
     }
+
+    0
 }
 
 #[cfg(test)]

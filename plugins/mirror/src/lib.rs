@@ -29,9 +29,7 @@ pub unsafe extern "C" fn process_image(
             }
         };
 
-        mirror_image(width as usize, height as usize, rgba_data, config);
-
-        Ok(0)
+        Ok(mirror_image(width as usize, height as usize, rgba_data, config))
     }));
 
     match result {
@@ -74,18 +72,22 @@ fn parse_config(c_buf: *const c_char) -> Result<ImageConfig, String> {
         .map_err(|e| format!("Ошибка JSON: {}", e))
 }
 
-fn mirror_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConfig) {
+fn mirror_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageConfig) -> i32 {
+    if rgba_data.is_null() || width == 0 || height == 0 {
+        return -3;
+    }
+
     if config.horizontal {
-        let total_pixels = width * height;
+        let Some(total_pixels) = width.checked_mul(height) else {
+            return -4;
+        };
 
         // Safety: Указатель rgba_data валиден, указывает на буфер размером не меннее total_pixels * 4
         let pixel_slice = unsafe {std::slice::from_raw_parts_mut(rgba_data as *mut [u8; 4], total_pixels) };
 
-        let w = width as usize;
-
-        for row in pixel_slice.chunks_exact_mut(w) {
+        for row in pixel_slice.chunks_exact_mut(width) {
             let mut left = 0;
-            let mut right = w - 1;
+            let mut right = width - 1;
             
             while left < right {
                 row.swap(left, right);
@@ -96,8 +98,12 @@ fn mirror_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageCo
     }
 
     if config.vertical {
-        let row_stride = width * 4;
-        let total_bytes = row_stride * height;
+        let Some(row_stride) = width.checked_mul(4) else {
+            return -4;
+        };
+        let Some(total_bytes) = row_stride.checked_mul(height) else {
+            return -4;
+        };
 
         // Safety: Указатель rgba_data валиден, указывает на буфер размером не меннее total_pixels * 4
         let byte_slice = unsafe { std::slice::from_raw_parts_mut(rgba_data, total_bytes) };
@@ -118,6 +124,8 @@ fn mirror_image(width: usize, height: usize, rgba_data: *mut u8, config: ImageCo
             bottom -= 1;
         }
     }
+
+    0
 }
 
 #[cfg(test)]
